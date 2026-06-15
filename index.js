@@ -28,18 +28,13 @@ function writeLog(type, text) {
 const KEYWORDS = ['blox', 'bloxfruit', 'bf'];
 
 // ช่องที่บอททำงาน (ปล่อยว่าง [] = ทุกช่อง)
-const ALLOWED_CHANNEL_IDS = [];
+const ALLOWED_CHANNEL_IDS = [1479847140485370028];
 
 // ─────────────────────────────────────────
 //  ข้อความตอบกลับ — แก้ได้เลย ✏️
 // ─────────────────────────────────────────
 const REPLY_MESSAGE = `
-🍎 **Blox Fruit Info!** ⚔️
-
-ยินดีต้อนรับเข้าสู่โลกของ Blox Fruit! 🌊
-> 🗺️ ลงแมพ, ฝึกฝน, และล่าหา Devil Fruit!
-> ⚡ เลเวลสูงสุด: **2550**
-> 🏴‍☠️ เซิร์ฟเวอร์ทางการ: https://discord.gg/bloxfruits
+ควย กูยังทำไม่เสร็จไอโง่
 
 พิมพ์อะไรให้เราช่วยได้อีกไหม? 😄
 `;
