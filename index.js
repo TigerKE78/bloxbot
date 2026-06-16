@@ -269,4 +269,3 @@ async function createTicket(guild, member) {
 
 client.on('error', (err) => writeLog('ERROR', err.message));
 client.login(process.env.DISCORD_TOKEN || 'YOUR_BOT_TOKEN_HERE');
-    
