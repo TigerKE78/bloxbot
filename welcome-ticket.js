@@ -216,8 +216,8 @@ function guild_channel(guild, name) {
   return guild.channels.cache.find((c) => c.name === name && c.type === ChannelType.GuildText);
 }
 
-client.once('ready', () => {
-  writeLog('INFO', `MazaHub Bot ออนไลน์! → ${client.user.tag}`);
+client.once('clientready', () => {
+  writeLog('INFO', `MazaHub Bot ออนไลน์! → ${c.user.tag}`);
 });
 
 client.on('error', (err) => writeLog('ERROR', err.message));
