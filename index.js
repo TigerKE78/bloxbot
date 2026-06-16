@@ -1,7 +1,7 @@
 const {
   Client, GatewayIntentBits, EmbedBuilder,
   ActionRowBuilder, ButtonBuilder, ButtonStyle,
-  ChannelType, PermissionFlagsBits
+  ChannelType, PermissionFlagsBits, MessageFlags
 } = require('discord.js');
 const fs   = require('fs');
 const path = require('path');
@@ -60,185 +60,8 @@ const KEYWORD_REPLIES = [
     reply: `⚡ **Raid Guide**\n> 1️⃣ ซื้อ Raid Chip\n> 2️⃣ ไป Mysterious Scientist\n> 3️⃣ ชวนเพื่อน 4 คน!`
   },
   {
-    keywords: ['fps', 'ยิงปืน'],
-    reply: `-- [[ LOAD NEVERLOSE UI LIBRARY ]] --
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/CludeHub/Can-You-Come-Back-To-Me/refs/heads/main/NEVERLOSE-CS2-SOURCE.lua"))()
-local Window = Library:AddWindow("CludeHub", "rbxassetid://118608145176297", "Custom Script")
-
--- [[ SERVICES ]] --
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-
--- [[ SETTINGS CONFIG ]] --
-local Settings = {
-    AimbotEnabled = false,
-    WallCheck = true, -- true = ล็อกเฉพาะตัวที่ไม่มีอะไรบัง, false = ล็อกทะลุกำแพง
-    ESPOutline = false,
-    ESPLine = false
-}
-
--- [[ UI SETUP (NEVERLOSE STYLE) ]] --
-Window:AddTabLabel("Combat & Visuals")
-local MainTab = Window:AddTab("Main Menu", "gear")
-
--- แบ่งฝั่งซ้าย (Aimbot) และ ฝั่งขวา (ESP)
-local AimbotSection = MainTab:AddSection("AIMBOT SYSTEM", "left")
-local ESPSection = MainTab:AddSection("ESP VISUALS", "right")
-
--- [ Elements: Aimbot Section ]
-AimbotSection:AddToggle("Enable Aimbot", false, function(v)
-    Settings.AimbotEnabled = v
-end)
-
-AimbotSection:AddDropdown("Aimbot Mode", {"Lock Visible Only", "Lock Through Wall"}, function(v)
-    if v == "Lock Visible Only" then
-        Settings.WallCheck = true
-    elseif v == "Lock Through Wall" then
-        Settings.WallCheck = false
-    end
-end)
-
--- [ Elements: ESP Section ]
-ESPSection:AddToggle("ESP Outline", false, function(v)
-    Settings.ESPOutline = v
-end)
-
-ESPSection:AddToggle("ESP Line", false, function(v)
-    Settings.ESPLine = v
-end)
-
-
--- [[ FUNCTION: MOUSE CONTROL (RIGHT ALT) ]] --
-local mouseVisible = true
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if input.KeyCode == Enum.KeyCode.RightAlt then
-        mouseVisible = not mouseVisible
-        UserInputService.MouseIconEnabled = mouseVisible
-    end
-end)
-
-
--- [[ CORE LOGIC: AIMBOT ]] --
-local function isVisible(targetPart)
-    if not Settings.WallCheck then return true end -- ถ้าสลับโหมดทะลุกำแพง ไม่ต้องเช็คสิ่งกีดขวาง
-    
-    local ignoreList = {LocalPlayer.Character, targetPart.Parent}
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = ignoreList
-    
-    local direction = targetPart.Position - Camera.CFrame.Position
-    local raycastResult = workspace:Raycast(Camera.CFrame.Position, direction, raycastParams)
-    
-    return raycastResult == nil
-end
-
-local function getClosestPlayer()
-    local closestPlayer = nil
-    local shortestDistance = math.huge
-
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            local hrp = player.Character.HumanoidRootPart
-            local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-            
-            if onScreen and isVisible(hrp) then
-                local mousePos = UserInputService:GetMouseLocation()
-                local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                
-                if distance < shortestDistance then
-                    closestPlayer = player
-                    shortestDistance = distance
-                end
-            end
-        end
-    end
-    return closestPlayer
-end
-
--- ทำงานเมื่อเปิด Aimbot และ กดคลิกขวาค้าง (MouseButton2)
-RunService.RenderStepped:Connect(function()
-    if Settings.AimbotEnabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local target = getClosestPlayer()
-        if target and target.Character and target.Character:FindFirstChild("Head") then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.Head.Position)
-        end
-    end
-end)
-
-
--- [[ CORE LOGIC: ESP (LINE & OUTLINE) ]] --
-local function createESP(player)
-    -- สร้าง Line ESP (วาดด้วย Drawing)
-    local line = Drawing.new("Line")
-    line.Visible = false
-    line.Color = Color3.fromRGB(255, 255, 255)
-    line.Thickness = 1.5
-    line.Transparency = 1
-
-    -- สร้าง Outline ESP (ใช้ระบบ Highlight ของตัวละคร)
-    local highlight = Instance.new("Highlight")
-    highlight.Enabled = false
-    highlight.FillTransparency = 1
-    highlight.OutlineColor = Color3.fromRGB(255, 0, 50)
-    highlight.OutlineTransparency = 0
-
-    local function updateESP()
-        local connection
-        connection = RunService.RenderStepped:Connect(function()
-            -- เคลียร์ขยะเมื่อผู้เล่นออกหรือตาย
-            if not player.Parent or not player.Character then
-                line.Visible = false
-                highlight.Enabled = false
-                if not player.Parent then
-                    line:Remove()
-                    highlight:Destroy()
-                    connection:Disconnect()
-                end
-                return
-            end
-
-            local character = player.Character
-            local hrp = character:FindFirstChild("HumanoidRootPart")
-            
-            -- บังคับใช้และอัปเดต Line ESP
-            if Settings.ESPLine and hrp then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                if onScreen then
-                    line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y) -- เริ่มจากกลางจอด้านล่าง
-                    line.To = Vector2.new(screenPos.X, screenPos.Y)
-                    line.Visible = true
-                else
-                    line.Visible = false
-                end
-            else
-                line.Visible = false
-            end
-
-            -- บังคับใช้และอัปเดต Outline ESP
-            if Settings.ESPOutline and character then
-                if highlight.Parent ~= character then
-                    highlight.Parent = character
-                end
-                highlight.Enabled = true
-            else
-                highlight.Enabled = false
-            end
-        end)
-    end
-    coroutine.wrap(updateESP)()
-end
-
--- ค้นหาและรัน ESP ให้ผู้เล่นทุกคน
-for _, p in pairs(Players:GetPlayers()) do
-    if p ~= LocalPlayer then createESP(p) end
-end
-Players.PlayerAdded:Connect(function(p)
-    if p ~= LocalPlayer then createESP(p) end
-end)`
+    keywords: ['level', 'เลเวล', 'lvl'],
+    reply: `📈 **Leveling Guide**\n> 1-700 → Quest ตามเกาะ\n> 700-1500 → Magma Village\n> 1500-2550 → Cake Island`
   },
   {
     keywords: ['code', 'โค้ด'],
@@ -286,13 +109,19 @@ client.on('guildMemberAdd', async (member) => {
     .setTimestamp();
 
   const wch = guild.channels.cache.find(
-    (c) => c.name === WELCOME_CHANNEL_NAME && c.type === ChannelType.GuildText
+    (c) => c.type === ChannelType.GuildText && c.name.toLowerCase().includes(WELCOME_CHANNEL_NAME)
   );
   if (wch) {
-    await wch.send({ embeds: [embed] }).catch(() => {});
-    writeLog('WELCOME', `ช่อง #welcome → ${member.user.tag}`);
+    await wch.send({ embeds: [embed] }).catch((err) => {
+      writeLog('ERROR', `ส่งข้อความ welcome ไม่ได้ (#${wch.name}): ${err.message}`);
+    });
+    writeLog('WELCOME', `ช่อง #${wch.name} → ${member.user.tag}`);
   } else {
-    writeLog('WARN', `หาช่อง #${WELCOME_CHANNEL_NAME} ไม่เจอ → ${member.user.tag}`);
+    const allTextChannels = guild.channels.cache
+      .filter((c) => c.type === ChannelType.GuildText)
+      .map((c) => c.name)
+      .join(', ');
+    writeLog('WARN', `หาช่องที่มีคำว่า "${WELCOME_CHANNEL_NAME}" ไม่เจอ → ${member.user.tag} | ช่องที่มีในเซิร์ฟเวอร์: ${allTextChannels}`);
   }
 });
 
@@ -391,10 +220,11 @@ client.on('messageCreate', async (message) => {
 
   if (matched) {
     try {
-      await message.reply(matched.reply);
+      const safeReply = matched.reply.length > 2000 ? matched.reply.slice(0, 1990) + '...' : matched.reply;
+      await message.reply(safeReply);
       writeLog('REPLY', `keyword="${matchedKw}" | user=${message.author.tag}`);
     } catch (err) {
-      writeLog('ERROR', `ส่งไม่ได้: ${err.message}`);
+      writeLog('ERROR', `ส่งไม่ได้ (keyword="${matchedKw}", length=${matched.reply.length}): ${err.message}`);
     }
   } else {
     writeLog('SKIP', `user=${message.author.tag} | msg="${message.content.slice(0, 60)}"`);
@@ -408,7 +238,7 @@ client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
 
   if (interaction.customId === 'open_ticket') {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const ch = await createTicket(interaction.guild, interaction.member);
     if (ch) return interaction.editReply(`✅ เปิด Ticket แล้ว! → ${ch}`);
     return interaction.editReply('⚠️ คุณมี Ticket ที่เปิดอยู่แล้ว!');
@@ -423,7 +253,7 @@ client.on('interactionCreate', async (interaction) => {
 
   // ปุ่มรับยศ
   if (interaction.customId === 'get_role') {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const role = interaction.guild.roles.cache.find((r) => r.name === VERIFY_ROLE_NAME);
     if (!role) {
