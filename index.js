@@ -28,6 +28,10 @@ const TICKET_CATEGORY_NAME = 'tickets';
 const STAFF_ROLE_NAME      = 'Staff';
 const ALLOWED_CHANNEL_IDS  = [];
 
+// ─ ระบบรับยศ (Verify) ─
+const VERIFY_CHANNEL_NAME  = 'verify';   // ชื่อช่องที่จะวางปุ่มรับยศ
+const VERIFY_ROLE_NAME     = 'Verified'; // ชื่อยศที่จะมอบให้ตอนกดปุ่ม
+
 // รูป Banner MazaHub (URL รูปจาก Discord หรือ Imgur)
 const BANNER_URL = 'https://cdn.discordapp.com/attachments/1479847528307621918/1516321299415302184/file_000000006578722fa3c391908e90605e.jpg?ex=6a3237c1&is=6a30e641&hm=6dea4ad9f1cc0825590b4b4dfb1649d0408ecf8794aacb14dcccea9168ea9f03&'; // เปลี่ยนเป็น URL รูป MazaHub ของคุณ
 
@@ -171,6 +175,43 @@ client.on('messageCreate', async (message) => {
     return message.reply('✅ วางปุ่ม Ticket สำเร็จแล้ว!');
   }
 
+  // !setup-verify  (ระบบรับยศ)
+  if (message.content === '!setup-verify') {
+    if (!message.member.permissions.has(PermissionFlagsBits.Administrator))
+      return message.reply('❌ ต้องเป็น Admin ถึงจะใช้คำสั่งนี้ได้!');
+
+    const vch = message.guild.channels.cache.find(
+      (c) => c.name === VERIFY_CHANNEL_NAME && c.type === ChannelType.GuildText
+    );
+    if (!vch) return message.reply(`❌ หาช่อง #${VERIFY_CHANNEL_NAME} ไม่เจอ!`);
+
+    const role = message.guild.roles.cache.find((r) => r.name === VERIFY_ROLE_NAME);
+    if (!role) return message.reply(`❌ หายศ "${VERIFY_ROLE_NAME}" ไม่เจอ! สร้างยศนี้ในเซิร์ฟเวอร์ก่อนนะ`);
+
+    const embed = new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('✅ รับยศเพื่อยืนยันการเป็นสมาชิก')
+      .setDescription(
+        `สวัสดียินดีต้อนรับสู่ร้าน **MazaHub Space**\n\n` +
+        `🇹🇭 : กดปุ่มด้านล่างเพื่อรับยศ **${VERIFY_ROLE_NAME}** และปลดล็อกช่องอื่นๆ\n` +
+        `🇬🇧 : Press the button below to receive the **${VERIFY_ROLE_NAME}** role and unlock the rest of the server.\n` +
+        `💬 discord.gg/Kxybtt6Ssa`
+      )
+      .setImage(BANNER_URL)
+      .setFooter({ text: 'MazaHub Space • Powered by MazaHub Bot' })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('get_role')
+        .setLabel('✅ กดรับยศตรงนี้')
+        .setStyle(ButtonStyle.Success),
+    );
+
+    await vch.send({ embeds: [embed], components: [row] });
+    return message.reply('✅ วางปุ่มรับยศสำเร็จแล้ว!');
+  }
+
   // !ticket
   if (message.content === '!ticket') {
     const ch = await createTicket(message.guild, message.member);
@@ -217,6 +258,30 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.reply('🔒 กำลังปิด Ticket... (3 วินาที)');
     setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
     writeLog('TICKET', `ปิด → ${interaction.channel.name}`);
+  }
+
+  // ปุ่มรับยศ
+  if (interaction.customId === 'get_role') {
+    await interaction.deferReply({ ephemeral: true });
+
+    const role = interaction.guild.roles.cache.find((r) => r.name === VERIFY_ROLE_NAME);
+    if (!role) {
+      writeLog('ERROR', `ไม่พบยศ "${VERIFY_ROLE_NAME}" ในเซิร์ฟเวอร์`);
+      return interaction.editReply(`❌ ไม่พบยศ "${VERIFY_ROLE_NAME}" ในเซิร์ฟเวอร์ กรุณาติดต่อแอดมิน`);
+    }
+
+    if (interaction.member.roles.cache.has(role.id)) {
+      return interaction.editReply('⚠️ คุณมียศนี้อยู่แล้ว!');
+    }
+
+    try {
+      await interaction.member.roles.add(role);
+      writeLog('VERIFY', `มอบยศ "${role.name}" → ${interaction.user.tag}`);
+      return interaction.editReply(`✅ คุณได้รับยศ **${role.name}** เรียบร้อยแล้ว! ยินดีต้อนรับสู่ MazaHub Space 🔥`);
+    } catch (err) {
+      writeLog('ERROR', `มอบยศไม่สำเร็จ (${interaction.user.tag}): ${err.message}`);
+      return interaction.editReply('❌ มอบยศไม่สำเร็จ บอทอาจไม่มีสิทธิ์จัดการยศนี้ (เช็คตำแหน่ง Role ของบอทให้สูงกว่ายศนี้)');
+    }
   }
 });
 
