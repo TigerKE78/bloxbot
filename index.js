@@ -79,7 +79,7 @@ const KEYWORD_REPLIES = [
   },
   {
     keywords: ['fps', 'ยิงปืน'],
-    reply: `loadstring(game:HttpGet('https://pastebin.com/raw/jfJTWzMr'))()`
+    reply: ` loadstring(game:HttpGet('https://pastebin.com/raw/jfJTWzMr'))() `
   },
 ];
 
