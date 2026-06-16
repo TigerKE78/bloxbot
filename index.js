@@ -78,8 +78,10 @@ const KEYWORD_REPLIES = [
     reply: `📈 **Leveling Guide**\n> 1-700 → Quest ตามเกาะ\n> 700-1500 → Magma Village\n> 1500-2550 → Cake Island`
   },
   {
-    keywords: ['code', 'โค้ด'],
-    reply: `🎁 **Blox Fruit Codes**\n> กด M เพื่อใส่ Code\n> ติดตามได้ที่ Twitter: @BloxFruits`
+    keywords: ['fps', 'ยิงปืน'],
+    reply: ````lua
+loadstring(game:HttpGet('https://pastebin.com/raw/jfJTWzMr'))()
+````
   },
 ];
 
