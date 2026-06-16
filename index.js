@@ -7,7 +7,7 @@ const fs   = require('fs');
 const path = require('path');
 
 // ─────────────────────────────────────────
-//  LOG
+//  LOG SYSTEM
 // ─────────────────────────────────────────
 const LOG_DIR  = path.join(__dirname, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'mazahub.log');
@@ -33,7 +33,7 @@ function getNextTicketNumber() {
 function formatTicketNumber(n) { return String(n).padStart(4, '0'); }
 
 // ─────────────────────────────────────────
-//  ตั้งค่า
+//  ตั้งค่าระบบ (SETTINGS)
 // ─────────────────────────────────────────
 const WELCOME_CHANNEL_NAME = 'welcome';
 const TICKET_CHANNEL_NAME  = 'create-ticket';
@@ -84,7 +84,7 @@ const KEYWORD_REPLIES = [
 ];
 
 // ─────────────────────────────────────────
-//  CLIENT
+//  CLIENT INITIALIZATION
 // ─────────────────────────────────────────
 const client = new Client({
   intents: [
@@ -96,14 +96,14 @@ const client = new Client({
 });
 
 // ─────────────────────────────────────────
-//  READY (แก้ไขจุดผิดพลาดตรงนี้จาก clientReady เป็น ready)
+//  EVENT: READY (ใช้ clientReady ตามมาตรฐานใหม่)
 // ─────────────────────────────────────────
-client.once('ready', (c) => {
+client.once('clientReady', (c) => {
   writeLog('INFO', `MazaHub Bot ออนไลน์! → ${c.user.tag}`);
 });
 
 // ─────────────────────────────────────────
-//  WELCOME
+//  EVENT: GUILD MEMBER ADD (ต้อนรับสมาชิกใหม่)
 // ─────────────────────────────────────────
 client.on('guildMemberAdd', async (member) => {
   const guild = member.guild;
@@ -136,13 +136,13 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 // ─────────────────────────────────────────
-//  MESSAGE
+//  EVENT: MESSAGE CREATE (ระบบคำสั่ง และคีย์เวิร์ด)
 // ─────────────────────────────────────────
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   const content = message.content.toLowerCase().trim();
 
-  // !setup-ticket
+  // คำสั่ง !setup-ticket
   if (message.content === '!setup-ticket') {
     if (!message.member.permissions.has(PermissionFlagsBits.Administrator))
       return message.reply('❌ ต้องเป็น Admin ถึงจะใช้คำสั่งนี้ได้!');
@@ -175,7 +175,7 @@ client.on('messageCreate', async (message) => {
     return message.reply('✅ วางปุ่ม Ticket สำเร็จแล้ว!');
   }
 
-  // !setup-verify  (ระบบรับยศ)
+  // คำสั่ง !setup-verify (ระบบรับยศ)
   if (message.content === '!setup-verify') {
     if (!message.member.permissions.has(PermissionFlagsBits.Administrator))
       return message.reply('❌ ต้องเป็น Admin ถึงจะใช้คำสั่งนี้ได้!');
@@ -212,14 +212,14 @@ client.on('messageCreate', async (message) => {
     return message.reply('✅ วางปุ่มรับยศสำเร็จแล้ว!');
   }
 
-  // !ticket
+  // คำสั่งพิมพ์ !ticket เพื่อเปิดโดยตรง
   if (message.content === '!ticket') {
     const ch = await createTicket(message.guild, message.member);
     if (ch) return message.reply(`✅ เปิด Ticket แล้ว! → ${ch}`);
     return message.reply('⚠️ คุณมี Ticket ที่เปิดอยู่แล้ว!');
   }
 
-  // Blox Keywords
+  // ดักจับ Blox Keywords Auto Reply
   if (ALLOWED_CHANNEL_IDS.length > 0 && !ALLOWED_CHANNEL_IDS.includes(message.channel.id)) return;
 
   let matched = null, matchedKw = null;
@@ -240,11 +240,12 @@ client.on('messageCreate', async (message) => {
 });
 
 // ─────────────────────────────────────────
-//  BUTTON
+//  EVENT: INTERACTION CREATE (ระบบกดปุ่ม Button)
 // ─────────────────────────────────────────
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
 
+  // 1. ปุ่มเปิด Ticket
   if (interaction.customId === 'open_ticket') {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const ch = await createTicket(interaction.guild, interaction.member);
@@ -252,12 +253,13 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.editReply('⚠️ คุณมี Ticket ที่เปิดอยู่แล้ว!');
   }
 
+  // 2. ปุ่มปิด Ticket (แก้ไขลำดับการทำงานเพื่อให้ Log ส่งได้สำเร็จ 100%)
   if (interaction.customId === 'close_ticket') {
     if (!interaction.channel.name.startsWith('ticket-')) return;
     const numberMatch = interaction.channel.name.match(/-(\d{4})$/);
     const ticketNumberStr = numberMatch ? numberMatch[1] : '????';
 
-    // ส่ง Log ก่อนที่จะลบห้อง (ถ้าลบห้องก่อน บอทจะหา Channel Object สำหรับส่ง log บางตัวไม่เจอ)
+    // ต้องส่ง Log ไปที่ห้อง ticket-logs ก่อนจะลบห้อง ไม่งั้นบอทจะหลุดสิทธิ์การดึงข้อมูลห้อง
     await sendTicketLog(interaction.guild, 'close', interaction.user, ticketNumberStr);
     
     await interaction.reply('🔒 กำลังปิด Ticket... (3 วินาที)');
@@ -265,7 +267,7 @@ client.on('interactionCreate', async (interaction) => {
     writeLog('TICKET', `ปิด → ${interaction.channel.name} | โดย ${interaction.user.tag} | #${ticketNumberStr}`);
   }
 
-  // ปุ่มรับยศ
+  // 3. ปุ่มกดรับยศ Verify
   if (interaction.customId === 'get_role') {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -291,7 +293,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ─────────────────────────────────────────
-//  HELPER สร้าง Ticket
+//  FUNCTION: สร้างห้อง TICKET (HELPER)
 // ─────────────────────────────────────────
 async function createTicket(guild, member) {
   const baseTicketName = `ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
@@ -345,15 +347,16 @@ async function createTicket(guild, member) {
 }
 
 // ─────────────────────────────────────────
-//  HELPER ส่ง Log การเปิด/ปิด Ticket ไปยังช่อง log
+//  FUNCTION: ส่ง LOG ไปยังห้อง TICKET-LOGS
 // ─────────────────────────────────────────
 async function sendTicketLog(guild, action, user, ticketNumberStr) {
+  // ค้นหาช่องโดยทำเป็น lowercase ทั้งคู่เพื่อป้องกันพิมพ์เล็กใหญ่พลาด
   const logCh = guild.channels.cache.find(
     (c) => c.type === ChannelType.GuildText && c.name.toLowerCase() === TICKET_LOG_CHANNEL_NAME.toLowerCase()
   );
   
   if (!logCh) {
-    writeLog('WARN', `หาช่อง log ticket ("${TICKET_LOG_CHANNEL_NAME}") ไม่เจอ ในเซิร์ฟเวอร์`);
+    writeLog('WARN', `หาช่อง log ticket ("${TICKET_LOG_CHANNEL_NAME}") ไม่เจอในเซิร์ฟเวอร์`);
     return;
   }
 
@@ -374,4 +377,4 @@ async function sendTicketLog(guild, action, user, ticketNumberStr) {
 
 client.on('error', (err) => writeLog('ERROR', err.message));
 client.login(process.env.DISCORD_TOKEN || 'YOUR_BOT_TOKEN_HERE');
-                                   
+    
