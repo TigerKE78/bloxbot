@@ -47,7 +47,7 @@ const KEYWORD_REPLIES = [
     reply: `🎁 **Blox Fruit Codes**\n> กด M เพื่อใส่ Code\n> ติดตามได้ที่ Twitter: @BloxFruits`
   },
   {
-    keywords: ['ku', 'k'],
+    keywords: ['ku', ''],
     reply: `😄 ว่าไง! มีอะไรให้ช่วยเรื่อง Blox Fruit ไหม?`
   },
 ];
