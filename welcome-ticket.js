@@ -22,8 +22,8 @@ function writeLog(type, text) {
 // ─────────────────────────────────────────
 //  ตั้งค่า — แก้ตรงนี้ได้เลย 🛠️
 // ─────────────────────────────────────────
-const WELCOME_CHANNEL_NAME = 'welcome';        // ชื่อช่อง welcome
-const TICKET_CHANNEL_NAME  = 'create-ticket';  // ชื่อช่องที่วางปุ่ม ticket
+const WELCOME_CHANNEL_NAME = '💼-welcome';        // ชื่อช่อง welcome
+const TICKET_CHANNEL_NAME  = 'ticket';  // ชื่อช่องที่วางปุ่ม ticket
 const TICKET_CATEGORY_NAME = 'tickets';        // ชื่อ category สำหรับเก็บ ticket
 const STAFF_ROLE_NAME      = 'Staff';          // ชื่อ role staff ที่จะเห็น ticket
 
