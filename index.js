@@ -47,7 +47,7 @@ const VERIFY_CHANNEL_NAME  = 'verify';   // ชื่อช่องที่จ
 const VERIFY_ROLE_NAME     = 'Verified'; // ชื่อยศที่จะมอบให้ตอนกดปุ่ม
 
 // รูป Banner MazaHub (URL รูปจาก Discord หรือ Imgur)
-const BANNER_URL = 'https://cdn.discordapp.com/attachments/1479847528307621918/1516321299415302184/file_000000006578722fa3c391908e90605e.jpg?ex=6a3237c1&is=6a30e641&hm=6dea4ad9f1cc0825590b4b4dfb1649d0408ecf8794aacb14dcccea9168ea9f03&'; // เปลี่ยนเป็น URL รูป MazaHub ของคุณ
+const BANNER_URL = 'https://cdn.discordapp.com/attachments/1479847528307621918/1516321299415302184/file_000000006578722fa3c391908e90605e.jpg'; 
 
 // ─────────────────────────────────────────
 //  KEYWORD REPLIES
@@ -96,9 +96,9 @@ const client = new Client({
 });
 
 // ─────────────────────────────────────────
-//  READY
+//  READY (แก้ไขจุดผิดพลาดตรงนี้จาก clientReady เป็น ready)
 // ─────────────────────────────────────────
-client.once('clientReady', (c) => {
+client.once('ready', (c) => {
   writeLog('INFO', `MazaHub Bot ออนไลน์! → ${c.user.tag}`);
 });
 
@@ -131,11 +131,7 @@ client.on('guildMemberAdd', async (member) => {
     });
     writeLog('WELCOME', `ช่อง #${wch.name} → ${member.user.tag}`);
   } else {
-    const allTextChannels = guild.channels.cache
-      .filter((c) => c.type === ChannelType.GuildText)
-      .map((c) => c.name)
-      .join(', ');
-    writeLog('WARN', `หาช่องที่มีคำว่า "${WELCOME_CHANNEL_NAME}" ไม่เจอ → ${member.user.tag} | ช่องที่มีในเซิร์ฟเวอร์: ${allTextChannels}`);
+    writeLog('WARN', `หาช่องที่มีคำว่า "${WELCOME_CHANNEL_NAME}" ไม่เจอ → ${member.user.tag}`);
   }
 });
 
@@ -238,10 +234,8 @@ client.on('messageCreate', async (message) => {
       await message.reply(safeReply);
       writeLog('REPLY', `keyword="${matchedKw}" | user=${message.author.tag}`);
     } catch (err) {
-      writeLog('ERROR', `ส่งไม่ได้ (keyword="${matchedKw}", length=${matched.reply.length}): ${err.message}`);
+      writeLog('ERROR', `ส่งไม่ได้ (keyword="${matchedKw}"): ${err.message}`);
     }
-  } else {
-    writeLog('SKIP', `user=${message.author.tag} | msg="${message.content.slice(0, 60)}"`);
   }
 });
 
@@ -263,8 +257,10 @@ client.on('interactionCreate', async (interaction) => {
     const numberMatch = interaction.channel.name.match(/-(\d{4})$/);
     const ticketNumberStr = numberMatch ? numberMatch[1] : '????';
 
-    await interaction.reply('🔒 กำลังปิด Ticket... (3 วินาที)');
+    // ส่ง Log ก่อนที่จะลบห้อง (ถ้าลบห้องก่อน บอทจะหา Channel Object สำหรับส่ง log บางตัวไม่เจอ)
     await sendTicketLog(interaction.guild, 'close', interaction.user, ticketNumberStr);
+    
+    await interaction.reply('🔒 กำลังปิด Ticket... (3 วินาที)');
     setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
     writeLog('TICKET', `ปิด → ${interaction.channel.name} | โดย ${interaction.user.tag} | #${ticketNumberStr}`);
   }
@@ -353,10 +349,11 @@ async function createTicket(guild, member) {
 // ─────────────────────────────────────────
 async function sendTicketLog(guild, action, user, ticketNumberStr) {
   const logCh = guild.channels.cache.find(
-    (c) => c.type === ChannelType.GuildText && c.name.toLowerCase().includes(TICKET_LOG_CHANNEL_NAME)
+    (c) => c.type === ChannelType.GuildText && c.name.toLowerCase() === TICKET_LOG_CHANNEL_NAME.toLowerCase()
   );
+  
   if (!logCh) {
-    writeLog('WARN', `หาช่อง log ticket ("${TICKET_LOG_CHANNEL_NAME}") ไม่เจอ`);
+    writeLog('WARN', `หาช่อง log ticket ("${TICKET_LOG_CHANNEL_NAME}") ไม่เจอ ในเซิร์ฟเวอร์`);
     return;
   }
 
@@ -377,3 +374,4 @@ async function sendTicketLog(guild, action, user, ticketNumberStr) {
 
 client.on('error', (err) => writeLog('ERROR', err.message));
 client.login(process.env.DISCORD_TOKEN || 'YOUR_BOT_TOKEN_HERE');
+                                   
