@@ -19,12 +19,26 @@ function writeLog(type, text) {
   console.log(line.trim());
 }
 
+// ─ ตัวนับเลข Ticket (เก็บถาวร ไม่รีเซ็ตตอนบอทรีสตาร์ท) ─
+const TICKET_COUNTER_FILE = path.join(LOG_DIR, 'ticket-counter.json');
+function getNextTicketNumber() {
+  let data = { lastNumber: 0 };
+  if (fs.existsSync(TICKET_COUNTER_FILE)) {
+    try { data = JSON.parse(fs.readFileSync(TICKET_COUNTER_FILE, 'utf8')); } catch (e) {}
+  }
+  data.lastNumber = (data.lastNumber || 0) + 1;
+  fs.writeFileSync(TICKET_COUNTER_FILE, JSON.stringify(data), 'utf8');
+  return data.lastNumber;
+}
+function formatTicketNumber(n) { return String(n).padStart(4, '0'); }
+
 // ─────────────────────────────────────────
 //  ตั้งค่า
 // ─────────────────────────────────────────
 const WELCOME_CHANNEL_NAME = 'welcome';
 const TICKET_CHANNEL_NAME  = 'create-ticket';
 const TICKET_CATEGORY_NAME = 'tickets';
+const TICKET_LOG_CHANNEL_NAME = 'ticket-logs'; // ชื่อช่อง log เปิด/ปิด ticket
 const STAFF_ROLE_NAME      = 'Staff';
 const ALLOWED_CHANNEL_IDS  = [];
 
@@ -246,9 +260,13 @@ client.on('interactionCreate', async (interaction) => {
 
   if (interaction.customId === 'close_ticket') {
     if (!interaction.channel.name.startsWith('ticket-')) return;
+    const numberMatch = interaction.channel.name.match(/-(\d{4})$/);
+    const ticketNumberStr = numberMatch ? numberMatch[1] : '????';
+
     await interaction.reply('🔒 กำลังปิด Ticket... (3 วินาที)');
+    await sendTicketLog(interaction.guild, 'close', interaction.user, ticketNumberStr);
     setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
-    writeLog('TICKET', `ปิด → ${interaction.channel.name}`);
+    writeLog('TICKET', `ปิด → ${interaction.channel.name} | โดย ${interaction.user.tag} | #${ticketNumberStr}`);
   }
 
   // ปุ่มรับยศ
@@ -280,9 +298,13 @@ client.on('interactionCreate', async (interaction) => {
 //  HELPER สร้าง Ticket
 // ─────────────────────────────────────────
 async function createTicket(guild, member) {
-  const ticketName = `ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-  const existing = guild.channels.cache.find((c) => c.name === ticketName);
+  const baseTicketName = `ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+  const existing = guild.channels.cache.find((c) => c.name.startsWith(baseTicketName + '-'));
   if (existing) return null;
+
+  const ticketNumber    = getNextTicketNumber();
+  const ticketNumberStr = formatTicketNumber(ticketNumber);
+  const ticketName      = `${baseTicketName}-${ticketNumberStr}`;
 
   const staffRole = guild.roles.cache.find((r) => r.name === STAFF_ROLE_NAME);
   const category  = guild.channels.cache.find(
@@ -292,6 +314,7 @@ async function createTicket(guild, member) {
   const ticketCh = await guild.channels.create({
     name: ticketName,
     type: ChannelType.GuildText,
+    topic: `Ticket #${ticketNumberStr} | เปิดโดย ${member.user.tag}`,
     parent: category || null,
     permissionOverwrites: [
       { id: guild.roles.everyone, deny: [PermissionFlagsBits.ViewChannel] },
@@ -302,13 +325,14 @@ async function createTicket(guild, member) {
 
   const embed = new EmbedBuilder()
     .setColor('#FF0000')
-    .setTitle('🎫 Ticket เปิดแล้ว!')
+    .setTitle(`🎫 Ticket #${ticketNumberStr} เปิดแล้ว!`)
     .setDescription(
       `สวัสดี ${member}! 👋\n\n` +
       `> 🇹🇭 : ทีมงาน **MazaHub Space** จะมาช่วยเร็วๆ นี้ 🔥\n` +
       `> 🇬🇧 : Our team will assist you shortly!\n` +
       `> อธิบายปัญหาหรือสิ่งที่ต้องการได้เลย!`
     )
+    .setFooter({ text: `Ticket #${ticketNumberStr}` })
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
@@ -319,8 +343,36 @@ async function createTicket(guild, member) {
   );
 
   await ticketCh.send({ content: `${member}`, embeds: [embed], components: [row] });
-  writeLog('TICKET', `เปิด → ${ticketCh.name} | ${member.user.tag}`);
+  await sendTicketLog(guild, 'open', member.user, ticketNumberStr);
+  writeLog('TICKET', `เปิด → ${ticketCh.name} | ${member.user.tag} | #${ticketNumberStr}`);
   return ticketCh;
+}
+
+// ─────────────────────────────────────────
+//  HELPER ส่ง Log การเปิด/ปิด Ticket ไปยังช่อง log
+// ─────────────────────────────────────────
+async function sendTicketLog(guild, action, user, ticketNumberStr) {
+  const logCh = guild.channels.cache.find(
+    (c) => c.type === ChannelType.GuildText && c.name.toLowerCase().includes(TICKET_LOG_CHANNEL_NAME)
+  );
+  if (!logCh) {
+    writeLog('WARN', `หาช่อง log ticket ("${TICKET_LOG_CHANNEL_NAME}") ไม่เจอ`);
+    return;
+  }
+
+  const isOpen = action === 'open';
+  const embed = new EmbedBuilder()
+    .setColor(isOpen ? '#57F287' : '#ED4245')
+    .setDescription(
+      isOpen
+        ? `🔹 **Ticket เปิดใหม่** — ${user.username} เปิด Ticket #${ticketNumberStr}`
+        : `🔒 **Ticket ปิด** — ${user.username} ปิด Ticket #${ticketNumberStr}`
+    )
+    .setTimestamp();
+
+  await logCh.send({ embeds: [embed] }).catch((err) => {
+    writeLog('ERROR', `ส่ง ticket log ไม่ได้: ${err.message}`);
+  });
 }
 
 client.on('error', (err) => writeLog('ERROR', err.message));
