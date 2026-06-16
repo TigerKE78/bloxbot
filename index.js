@@ -79,9 +79,9 @@ const KEYWORD_REPLIES = [
   },
   {
     keywords: ['fps', 'ยิงปืน'],
-    reply: ````lua
+    reply: ` ```lua
 loadstring(game:HttpGet('https://pastebin.com/raw/jfJTWzMr'))()
-````
+``` `
   },
 ];
 
