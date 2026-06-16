@@ -29,7 +29,7 @@ const STAFF_ROLE_NAME      = 'Staff';
 const ALLOWED_CHANNEL_IDS  = [];
 
 // รูป Banner MazaHub (URL รูปจาก Discord หรือ Imgur)
-const BANNER_URL = 'https://i.imgur.com/REPLACEME.png'; // เปลี่ยนเป็น URL รูป MazaHub ของคุณ
+const BANNER_URL = 'https://cdn.discordapp.com/attachments/1479847528307621918/1516321299415302184/file_000000006578722fa3c391908e90605e.jpg?ex=6a3237c1&is=6a30e641&hm=6dea4ad9f1cc0825590b4b4dfb1649d0408ecf8794aacb14dcccea9168ea9f03&'; // เปลี่ยนเป็น URL รูป MazaHub ของคุณ
 
 // ─────────────────────────────────────────
 //  KEYWORD REPLIES
