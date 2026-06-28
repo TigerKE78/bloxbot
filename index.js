@@ -295,31 +295,38 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 
 // ─── 5. Voice State: Mute / Deafen / ย้ายห้อง voice ───
 client.on('voiceStateUpdate', async (oldState, newState) => {
-  await sleep(500);
+  await sleep(1500); // เพิ่ม delay ให้ Discord Audit Log อัปเดตทัน
   const guild  = newState.guild;
   const member = newState.member;
   if (!member) return;
 
-  // ── ย้ายห้อง Voice (โดย Admin) ──
+  // ── ย้ายห้อง Voice (ทั้งย้ายเอง และถูกย้ายโดย Admin) ──
   if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
-    const audit = await guild.fetchAuditLogs({ type: AuditLogEvent.MemberMove, limit: 1 }).catch(() => null);
-    const entry = audit?.entries.first();
-    // ถ้า executor ไม่ใช่ตัวเอง = ถูกย้ายโดยคนอื่น
-    if (entry && entry.executor?.id !== member.id && Date.now() - entry.createdTimestamp < 5000) {
-      const embed = new EmbedBuilder()
-        .setColor('#9B59B6')
-        .setTitle('🔀 ย้ายสมาชิกไปห้อง Voice อื่น')
-        .addFields(
-          { name: 'สมาชิก', value: `${member.user.tag}`, inline: true },
-          { name: 'โดย', value: `${entry.executor.tag}`, inline: true },
-          { name: 'จากห้อง', value: `${oldState.channel?.name ?? '?'}`, inline: true },
-          { name: 'ไปห้อง', value: `${newState.channel?.name ?? '?'}`, inline: true }
-        )
-        .setTimestamp();
+    const audit = await guild.fetchAuditLogs({ type: AuditLogEvent.MemberMove, limit: 5 }).catch(() => null);
 
-      await sendAuditLog(guild, embed);
-      writeLog('AUDIT', `VOICE MOVE | ${member.user.tag} | ${oldState.channel?.name} → ${newState.channel?.name} | โดย ${entry.executor.tag}`);
-    }
+    // หา entry ที่ตรงกับ member คนนี้ และเพิ่งเกิดขึ้น (ภายใน 10 วินาที)
+    const entry = audit?.entries.find(
+      (e) => e.target?.id === member.id && Date.now() - e.createdTimestamp < 10000
+    ) ?? audit?.entries.find(
+      (e) => Date.now() - e.createdTimestamp < 10000
+    );
+
+    const movedBy = entry?.executor?.tag ?? 'ไม่ทราบ';
+    const isSelfMove = !entry || entry.executor?.id === member.id;
+
+    const embed = new EmbedBuilder()
+      .setColor('#9B59B6')
+      .setTitle(isSelfMove ? '🔀 ย้ายห้อง Voice (ด้วยตัวเอง)' : '🔀 ถูกย้ายห้อง Voice')
+      .addFields(
+        { name: 'สมาชิก', value: `${member.user.tag}`, inline: true },
+        { name: 'โดย', value: movedBy, inline: true },
+        { name: 'จากห้อง', value: `${oldState.channel?.name ?? '?'}`, inline: true },
+        { name: 'ไปห้อง', value: `${newState.channel?.name ?? '?'}`, inline: true }
+      )
+      .setTimestamp();
+
+    await sendAuditLog(guild, embed);
+    writeLog('AUDIT', `VOICE MOVE | ${member.user.tag} | ${oldState.channel?.name} → ${newState.channel?.name} | โดย ${movedBy}`);
   }
 
   // ── เข้า Voice ──
