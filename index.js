@@ -521,4 +521,177 @@ client.on('messageCreate', async (message) => {
 
   if (message.content === '!setup-verify') {
     if (!message.member.permissions.has(PermissionFlagsBits.Administrator))
-      return message.reply(
+      return message.reply('❌ ต้องเป็น Admin ถึงจะใช้คำสั่งนี้ได้!');
+
+    const vch = message.guild.channels.cache.find(
+      (c) => c.name === VERIFY_CHANNEL_NAME && c.type === ChannelType.GuildText
+    );
+    if (!vch) return message.reply(`❌ หาช่อง #${VERIFY_CHANNEL_NAME} ไม่เจอ!`);
+
+    const role = message.guild.roles.cache.find((r) => r.name === VERIFY_ROLE_NAME);
+    if (!role) return message.reply(`❌ หายศ "${VERIFY_ROLE_NAME}" ไม่เจอ!`);
+
+    const embed = new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('✅ รับยศเพื่อยืนยันการเป็นสมาชิก')
+      .setDescription(
+        `สวัสดียินดีต้อนรับสู่ร้าน **MazaHub Space**\n\n` +
+        `🇹🇭 : กดปุ่มด้านล่างเพื่อรับยศ **${VERIFY_ROLE_NAME}**\n` +
+        `🇬🇧 : Press the button below to receive the **${VERIFY_ROLE_NAME}** role.\n` +
+        `💬 discord.gg/Kxybtt6Ssa`
+      )
+      .setImage(BANNER_URL)
+      .setFooter({ text: 'MazaHub Space • Powered by MazaHub Bot' })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('get_role').setLabel('✅ กดรับยศตรงนี้').setStyle(ButtonStyle.Success),
+    );
+
+    await vch.send({ embeds: [embed], components: [row] });
+    return message.reply('✅ วางปุ่มรับยศสำเร็จแล้ว!');
+  }
+
+  if (message.content === '!ticket') {
+    const ch = await createTicket(message.guild, message.member);
+    if (ch) return message.reply(`✅ เปิด Ticket แล้ว! → ${ch}`);
+    return message.reply('⚠️ คุณมี Ticket ที่เปิดอยู่แล้ว!');
+  }
+
+  if (ALLOWED_CHANNEL_IDS.length > 0 && !ALLOWED_CHANNEL_IDS.includes(message.channel.id)) return;
+
+  let matched = null, matchedKw = null;
+  for (const entry of KEYWORD_REPLIES) {
+    const kw = entry.keywords.find((k) => content.includes(k));
+    if (kw) { matched = entry; matchedKw = kw; break; }
+  }
+
+  if (matched) {
+    try {
+      const safeReply = matched.reply.length > 2000 ? matched.reply.slice(0, 1990) + '...' : matched.reply;
+      await message.reply(safeReply);
+      writeLog('REPLY', `keyword="${matchedKw}" | user=${message.author.tag}`);
+    } catch (err) {
+      writeLog('ERROR', `ส่งไม่ได้ (keyword="${matchedKw}"): ${err.message}`);
+    }
+  }
+});
+
+// ─────────────────────────────────────────
+//  EVENT: INTERACTION CREATE
+// ─────────────────────────────────────────
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  if (interaction.customId === 'open_ticket') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const ch = await createTicket(interaction.guild, interaction.member);
+    if (ch) return interaction.editReply(`✅ เปิด Ticket แล้ว! → ${ch}`);
+    return interaction.editReply('⚠️ คุณมี Ticket ที่เปิดอยู่แล้ว!');
+  }
+
+  if (interaction.customId === 'close_ticket') {
+    if (!interaction.channel.name.startsWith('ticket-')) return;
+    const numberMatch = interaction.channel.name.match(/-(\d{4})$/);
+    const ticketNumberStr = numberMatch ? numberMatch[1] : '????';
+
+    await sendTicketLog(interaction.guild, 'close', interaction.user, ticketNumberStr);
+    await interaction.reply('🔒 กำลังปิด Ticket... (3 วินาที)');
+    setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
+    writeLog('TICKET', `ปิด → ${interaction.channel.name} | โดย ${interaction.user.tag}`);
+  }
+
+  if (interaction.customId === 'get_role') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const role = interaction.guild.roles.cache.find((r) => r.name === VERIFY_ROLE_NAME);
+    if (!role) return interaction.editReply(`❌ ไม่พบยศ "${VERIFY_ROLE_NAME}"`);
+    if (interaction.member.roles.cache.has(role.id)) return interaction.editReply('⚠️ คุณมียศนี้อยู่แล้ว!');
+
+    try {
+      await interaction.member.roles.add(role);
+      writeLog('VERIFY', `มอบยศ "${role.name}" → ${interaction.user.tag}`);
+      return interaction.editReply(`✅ คุณได้รับยศ **${role.name}** เรียบร้อยแล้ว!`);
+    } catch (err) {
+      writeLog('ERROR', `มอบยศไม่สำเร็จ: ${err.message}`);
+      return interaction.editReply('❌ มอบยศไม่สำเร็จ เช็คสิทธิ์บอทด้วย');
+    }
+  }
+});
+
+// ─────────────────────────────────────────
+//  FUNCTION: สร้าง TICKET
+// ─────────────────────────────────────────
+async function createTicket(guild, member) {
+  const baseTicketName = `ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+  const existing = guild.channels.cache.find((c) => c.name.startsWith(baseTicketName + '-'));
+  if (existing) return null;
+
+  const ticketNumber    = getNextTicketNumber();
+  const ticketNumberStr = formatTicketNumber(ticketNumber);
+  const ticketName      = `${baseTicketName}-${ticketNumberStr}`;
+
+  const staffRole = guild.roles.cache.find((r) => r.name === STAFF_ROLE_NAME);
+  const category  = guild.channels.cache.find(
+    (c) => c.name.toLowerCase() === TICKET_CATEGORY_NAME && c.type === ChannelType.GuildCategory
+  );
+
+  const ticketCh = await guild.channels.create({
+    name: ticketName,
+    type: ChannelType.GuildText,
+    topic: `Ticket #${ticketNumberStr} | เปิดโดย ${member.user.tag}`,
+    parent: category || null,
+    permissionOverwrites: [
+      { id: guild.roles.everyone, deny: [PermissionFlagsBits.ViewChannel] },
+      { id: member.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+      ...(staffRole ? [{ id: staffRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }] : []),
+    ],
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor('#FF0000')
+    .setTitle(`🎫 Ticket #${ticketNumberStr} เปิดแล้ว!`)
+    .setDescription(
+      `สวัสดี ${member}! 👋\n\n` +
+      `> 🇹🇭 : ทีมงาน **MazaHub Space** จะมาช่วยเร็วๆ นี้ 🔥\n` +
+      `> 🇬🇧 : Our team will assist you shortly!\n` +
+      `> อธิบายปัญหาหรือสิ่งที่ต้องการได้เลย!`
+    )
+    .setFooter({ text: `Ticket #${ticketNumberStr}` })
+    .setTimestamp();
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('close_ticket').setLabel('🔒 ปิด Ticket / Close Ticket').setStyle(ButtonStyle.Danger),
+  );
+
+  await ticketCh.send({ content: `${member}`, embeds: [embed], components: [row] });
+  await sendTicketLog(guild, 'open', member.user, ticketNumberStr);
+  writeLog('TICKET', `เปิด → ${ticketCh.name} | ${member.user.tag} | #${ticketNumberStr}`);
+  return ticketCh;
+}
+
+// ─────────────────────────────────────────
+//  FUNCTION: ส่ง LOG TICKET
+// ─────────────────────────────────────────
+async function sendTicketLog(guild, action, user, ticketNumberStr) {
+  const logCh = guild.channels.cache.find(
+    (c) => c.type === ChannelType.GuildText && c.name.toLowerCase() === TICKET_LOG_CHANNEL_NAME.toLowerCase()
+  );
+  if (!logCh) return writeLog('WARN', `หาช่อง "${TICKET_LOG_CHANNEL_NAME}" ไม่เจอ`);
+
+  const isOpen = action === 'open';
+  const embed = new EmbedBuilder()
+    .setColor(isOpen ? '#57F287' : '#ED4245')
+    .setDescription(
+      isOpen
+        ? `🔹 **Ticket เปิดใหม่** — ${user.username} เปิด Ticket #${ticketNumberStr}`
+        : `🔒 **Ticket ปิด** — ${user.username} ปิด Ticket #${ticketNumberStr}`
+    )
+    .setTimestamp();
+
+  await logCh.send({ embeds: [embed] }).catch((err) =>
+    writeLog('ERROR', `ส่ง ticket log ไม่ได้: ${err.message}`)
+  );
+}
+
+client.on('error', (err) => writeLog('ERROR', err.message));
+client.login(process.env.DISCORD_TOKEN || 'YOUR_BOT_TOKEN_HERE');
